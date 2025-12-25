@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
 using HtmlAgilityPack;
+using HttpNewsPAT.Classes;
 
 namespace HttpNewsPAT
 {
@@ -89,29 +90,68 @@ namespace HttpNewsPAT
                 Console.WriteLine(name + "\n" + "Изображение: " + src + "\n" + "Описание: " + description + "\n");
             }
         }
-        public static void ParseDNS()
+        public static void ParseDNSAdvanced()
         {
-            Console.WriteLine("Парсим DNS...\n");
+            Console.WriteLine("Расширенный парсинг DNS...\n");
 
-            var doc = new HtmlWeb().Load("https://www.dns-shop.ru/catalog/17a8a01d16404e77/smartfony/");
-            var items = doc.DocumentNode.SelectNodes("//div[contains(@class, 'catalog-product')]");
+            var web = new HtmlWeb();
+            web.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
-            if (items != null)
+            var doc = web.Load("https://www.dns-shop.ru/catalog/17a8a01d16404e77/smartfony/");
+
+            var productCards = doc.DocumentNode.SelectNodes("//div[contains(@class, 'catalog-product')]");
+
+            if (productCards == null || !productCards.Any())
             {
-                foreach (var item in items.Take(3))
+                Console.WriteLine("Карточки товаров не найдены. Пробуем найти по-другому...");
+
+                productCards = doc.DocumentNode.SelectNodes("//div[@data-id='product']") ??
+                              doc.DocumentNode.SelectNodes("//a[contains(@class, 'catalog-product__name')]/../..");
+            }
+
+            if (productCards != null)
+            {
+                var products = new List<ProductInfo>();
+
+                foreach (var card in productCards.Take(10))
                 {
-                    var img = item.SelectSingleNode(".//img")?.GetAttributeValue("src", "нет");
-                    if (!string.IsNullOrEmpty(img) && img.StartsWith("/"))
-                        img = "https://dns-shop.ru" + img;
+                    var product = new ProductInfo();
 
-                    var name = item.SelectSingleNode(".//a")?.InnerText?.Trim() ?? "???";
+                    var nameNode = card.SelectSingleNode(".//a[contains(@class, 'catalog-product__name')]");
+                    product.Name = nameNode?.InnerText?.Trim() ?? "Неизвестно";
 
-                    var price = item.SelectSingleNode(".//div[contains(@class, 'price')]")?.InnerText?.Trim() ?? "???";
+                    product.ProductUrl = nameNode?.GetAttributeValue("href", "");
+                    if (!string.IsNullOrEmpty(product.ProductUrl) && product.ProductUrl.StartsWith("/"))
+                    {
+                        product.ProductUrl = "https://www.dns-shop.ru" + product.ProductUrl;
+                    }
 
-                    Console.WriteLine($"Изображение: {img}");
-                    Console.WriteLine($"Наименование: {name}");
-                    Console.WriteLine($"Цена: {price}");
-                    Console.WriteLine("---");
+                    var priceNode = card.SelectSingleNode(".//div[contains(@class, 'product-buy__price')]");
+                    product.Price = priceNode?.InnerText?.Trim() ?? "Нет цены";
+
+                    var imgNode = card.SelectSingleNode(".//img[contains(@class, 'catalog-product__image')]");
+                    product.ImageUrl = imgNode?.GetAttributeValue("src", "") ??
+                                      imgNode?.GetAttributeValue("data-src", "");
+
+                    if (!string.IsNullOrEmpty(product.ImageUrl) && product.ImageUrl.StartsWith("/"))
+                    {
+                        product.ImageUrl = "https://www.dns-shop.ru" + product.ImageUrl;
+                    }
+
+                    var ratingNode = card.SelectSingleNode(".//div[contains(@class, 'catalog-product__rating')]");
+                    product.Rating = ratingNode?.InnerText?.Trim() ?? "Нет рейтинга";
+
+                    products.Add(product);
+                }
+
+                foreach (var product in products)
+                {
+                    Console.WriteLine($"Название: {product.Name}");
+                    Console.WriteLine($"Цена: {product.Price}");
+                    Console.WriteLine($"Рейтинг: {product.Rating}");
+                    Console.WriteLine($"Ссылка: {product.ProductUrl}");
+                    Console.WriteLine($"Изображение: {product.ImageUrl}");
+                    Console.WriteLine(new string('=', 50));
                 }
             }
         }
