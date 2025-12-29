@@ -36,7 +36,7 @@ namespace HttpNewsPAT
                 bool added = await AddNewsAsync(
                     token,
                     $"Новость от {DateTime.Now:dd.MM.yyyy HH:mm}",
-                    "Добавлено через консольное приложение на C#. Это новсть добавлена программно",
+                    "Добавлено через консольное приложение на C#. Это новость добавлена программно",
                     "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRnTQ04WdzI8_nx_D7_gGQK5nyjsunQOHNm5g&s"
                 );
 
