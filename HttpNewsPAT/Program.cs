@@ -44,13 +44,7 @@ namespace HttpNewsPAT
 
                 html = await GetContentHttpClientAsync(token);
                 ParsingHtml(html);
-
-                Console.WriteLine("\n" + new string('=', 60));
-                Console.WriteLine(" НАЧИНАЕМ ПАРСИНГ  (ШАГ 16)");
-                Console.WriteLine(new string('=', 60));
-                ParseQuotesAsync();
-
-
+                ParseRiaNewsAsync();
             }
             catch (Exception ex)
             {
@@ -60,22 +54,53 @@ namespace HttpNewsPAT
             Console.WriteLine($"\nЛог сохранен в: {_logFilePath}");
             Console.ReadLine();
         }
-
-        public static async Task ParseQuotesAsync()
+        public static async Task ParseRiaNewsAsync()
         {
-            var client = new HttpClient();
-            string html = await client.GetStringAsync("https://quotes.toscrape.com");
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-
-            var quotes = doc.DocumentNode.SelectNodes("//div[@class='quote']");
-            Console.WriteLine("\n Цитаты с quotes.toscrape.com:\n");
-
-            foreach (var q in quotes?.Take(3))
+            try
             {
-                string text = q.SelectSingleNode(".//span[@class='text']")?.InnerText ?? "";
-                string author = q.SelectSingleNode(".//small[@class='author']")?.InnerText ?? "";
-                Console.WriteLine($"«{text.Replace("“", "").Replace("”", "")}» — {author}\n");
+                _traceSource.TraceEvent(TraceEventType.Information, 1, "Начинаю парсинг RIA.RU через RSS");
+                Console.WriteLine("\n=== Парсинг RIA.RU (через RSS) ===");
+
+                var response = await _httpClient.GetAsync("https://ria.ru/export/rss2/archive/index.xml");
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Ошибка загрузки RSS RIA.RU: {response.StatusCode}");
+                    return;
+                }
+
+                var xml = await response.Content.ReadAsStringAsync();
+                var xmlDoc = new System.Xml.XmlDocument();
+                xmlDoc.LoadXml(xml);
+
+                var items = xmlDoc.SelectNodes("//item");
+                if (items == null || items.Count == 0)
+                {
+                    Console.WriteLine("RSS: Новости не найдены");
+                    return;
+                }
+
+                Console.WriteLine($"Найдено новостей в RSS: {items.Count}");
+
+                for (int i = 0; i < Math.Min(5, items.Count); i++)
+                {
+                    var item = items[i];
+                    string title = item["title"]?.InnerText?.Trim() ?? "Без заголовка";
+                    string link = item["link"]?.InnerText?.Trim() ?? "Без ссылки";
+                    string pubDate = item["pubDate"]?.InnerText?.Trim() ?? "";
+
+                    Console.WriteLine("\n------------------");
+                    Console.WriteLine($"Заголовок: {title}");
+                    Console.WriteLine($"Ссылка: {link}");
+                    if (!string.IsNullOrEmpty(pubDate))
+                        Console.WriteLine($"Дата: {pubDate}");
+                }
+
+                _traceSource.TraceEvent(TraceEventType.Information, 5, $"Успешно получено {Math.Min(5, items.Count)} новостей из RSS RIA.RU");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при парсинге RSS RIA.RU: {ex.Message}");
+                _traceSource.TraceEvent(TraceEventType.Error, 6, $"Ошибка RSS RIA.RU: {ex}");
             }
         }
         private static void SetupTracing()
