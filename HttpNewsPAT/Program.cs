@@ -36,7 +36,7 @@ namespace HttpNewsPAT
                 bool added = await AddNewsAsync(
                     token,
                     $"Новость от {DateTime.Now:dd.MM.yyyy HH:mm}",
-                    "Добавлено через консольное приложение на C#.",
+                    "Добавлено через консольное приложение на C#. Это новсть добавлена программно",
                     "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRnTQ04WdzI8_nx_D7_gGQK5nyjsunQOHNm5g&s"
                 );
 
@@ -54,8 +54,10 @@ namespace HttpNewsPAT
             Console.WriteLine($"\nЛог сохранен в: {_logFilePath}");
             Console.ReadLine();
         }
-        public static async Task ParseRiaNewsAsync()
+        public static async Task<List<(string Title, string Link, string ImageUrl)>> ParseRiaNewsAsync()
         {
+            var newsList = new List<(string, string, string)>();
+
             try
             {
                 _traceSource.TraceEvent(TraceEventType.Information, 1, "Начинаю парсинг RIA.RU через RSS");
@@ -65,7 +67,7 @@ namespace HttpNewsPAT
                 if (!response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"Ошибка загрузки RSS RIA.RU: {response.StatusCode}");
-                    return;
+                    return newsList;
                 }
 
                 var xml = await response.Content.ReadAsStringAsync();
@@ -76,7 +78,7 @@ namespace HttpNewsPAT
                 if (items == null || items.Count == 0)
                 {
                     Console.WriteLine("RSS: Новости не найдены");
-                    return;
+                    return newsList;
                 }
 
                 Console.WriteLine($"Найдено новостей в RSS: {items.Count}");
@@ -86,22 +88,33 @@ namespace HttpNewsPAT
                     var item = items[i];
                     string title = item["title"]?.InnerText?.Trim() ?? "Без заголовка";
                     string link = item["link"]?.InnerText?.Trim() ?? "Без ссылки";
-                    string pubDate = item["pubDate"]?.InnerText?.Trim() ?? "";
+
+                    string imageUrl = "https://upload.wikimedia.org/wikipedia/commons/5/5f/RIA_Novosti_logo.svg";
+                    var enclosure = item.SelectSingleNode("enclosure[@type='image/jpeg']");
+                    if (enclosure != null)
+                    {
+                        imageUrl = enclosure.Attributes["url"]?.Value ?? imageUrl;
+                    }
+
+                    string description = item["description"]?.InnerText?.Trim() ?? "Новость из RSS-ленты РИА Новости.";
 
                     Console.WriteLine("\n------------------");
                     Console.WriteLine($"Заголовок: {title}");
                     Console.WriteLine($"Ссылка: {link}");
-                    if (!string.IsNullOrEmpty(pubDate))
-                        Console.WriteLine($"Дата: {pubDate}");
+                    Console.WriteLine($"Изображение: {imageUrl}");
+
+                    newsList.Add((title, description, imageUrl));
                 }
 
-                _traceSource.TraceEvent(TraceEventType.Information, 5, $"Успешно получено {Math.Min(5, items.Count)} новостей из RSS RIA.RU");
+                _traceSource.TraceEvent(TraceEventType.Information, 5, $"Успешно получено {newsList.Count} новостей из RSS RIA.RU");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Ошибка при парсинге RSS RIA.RU: {ex.Message}");
                 _traceSource.TraceEvent(TraceEventType.Error, 6, $"Ошибка RSS RIA.RU: {ex}");
             }
+
+            return newsList;
         }
         private static void SetupTracing()
         {
